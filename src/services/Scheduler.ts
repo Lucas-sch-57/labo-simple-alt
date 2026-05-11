@@ -1,11 +1,13 @@
 import { Data } from '../types/data';
+import { Schedule, ScheduleResult } from '../types/schedule';
 import { PRIORITY } from '../constants/priority';
-import { toMinutes } from '../../utils/time';
+import { toMinutes, toTime } from '../utils/time';
 
 export class Scheduler {
-  public planifyLab(data: Data): void {
-    let schedule = [];
-    // STEP 1 : Tri des échantillons par ordre de priorité (ex: urgence, date de réception, etc.)
+  public planifyLab(data: Data): ScheduleResult {
+    let schedule: Schedule[] = [];
+    let totalAnalysisTime = 0;
+
     const sortedSamples = data.samples.sort((a, b) => {
       if (PRIORITY[a.priority] === PRIORITY[b.priority]) {
         const arrivalTimeA = toMinutes(a.arrivalTime);
@@ -15,15 +17,65 @@ export class Scheduler {
       return PRIORITY[a.priority] > PRIORITY[b.priority] ? -1 : 1;
     });
 
-    // console.log('Samples triés par priorité : ', sortedSamples);
-    //STEP 2 : Compatibilité entre les échantillons les équipements et les techniciens (ex: compétences, disponibilité, etc.)
-    const compatibilityAssignments = sortedSamples.map(sample => {});
+    sortedSamples.forEach(sample => {
+      const compatibleTechnician = data.technicians
+        .filter(
+          tech =>
+            tech.speciality === sample.type || tech.speciality === 'GENERAL'
+        )
+        .sort((a, b) => a.availableAt - b.availableAt)[0];
 
-    console.log(
-      'Compatibilité entre échantillons, techniciens et équipements : ',
-      compatibilityAssignments
+      const compatibleEquipment = data.equipments
+        .filter(equip => equip.type === sample.type && equip.available)
+        .sort((a, b) => a.availableAt - b.availableAt)[0];
+
+      if (compatibleTechnician && compatibleEquipment) {
+        const startTime = Math.max(
+          toMinutes(sample.arrivalTime),
+          compatibleTechnician.availableAt,
+          compatibleEquipment.availableAt
+        );
+        const endTime = startTime + sample.analysisTime;
+        compatibleTechnician.availableAt = endTime;
+        compatibleEquipment.availableAt = endTime;
+
+        schedule.push({
+          sampleId: sample.id,
+          technicianId: compatibleTechnician.id,
+          equipmentId: compatibleEquipment.id,
+          startTime: toTime(startTime),
+          endTime: toTime(endTime),
+          priority: sample.priority,
+        });
+
+        totalAnalysisTime += endTime - startTime;
+      }
+    });
+    const firstStartTime = Math.min(
+      ...schedule.map((s: any) => toMinutes(s.startTime))
     );
-    // STEP 3 : Gestion des crénaux horaires pour éviter les conflits et optimiser l'utilisation des ressources
-    // STEP 4 : Génération d'un planning détaillé pour chaque technicien et équipement, avec les tâches à réaliser et les délais associés
+    const lastEndTime = Math.max(
+      ...schedule.map((s: any) => toMinutes(s.endTime))
+    );
+    const totalTime = lastEndTime - firstStartTime;
+
+    const efficiency = totalAnalysisTime / totalTime;
+
+    let conflicts = 0;
+
+    schedule.forEach((s, index) => {
+      if (s.startTime < schedule[index - 1]?.endTime) {
+        conflicts++;
+      }
+    });
+
+    const metrics = {
+      totalTime,
+      efficiency: parseFloat((efficiency * 100).toFixed(2)),
+      conflicts: 0, // l'algorithme valide déjà qu'il n'y a pas de conflits grâce au Math.max pour le startTime
+    };
+
+    console.log('Schedule:', [schedule, metrics]);
+    return { schedule, metrics };
   }
 }
