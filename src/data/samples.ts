@@ -2,8 +2,7 @@ import { Equipment } from '../models/Equipment';
 import { Sample } from '../models/Sample';
 import { Technician } from '../models/Technician';
 
-// ─── Exemple 1 : Un seul échantillon ────────────────────────────────────────
-// Cas le plus simple : 1 sample, 1 technicien, 1 équipement
+// Exemple 1 : Un seul échantillon
 export const example1 = {
   samples: [new Sample('S001', 'BLOOD', 'URGENT', 30, '09:00', 'P001')],
   technicians: [
@@ -12,12 +11,11 @@ export const example1 = {
   equipments: [new Equipment('E001', 'Analyseur Sang A', 'BLOOD', true)],
 };
 
-// ─── Exemple 2 : Priorités STAT vs URGENT ───────────────────────────────────
-// URGENT arrive avant STAT mais STAT doit passer en premier
+// Exemple 2 : Priorités STAT vs URGENT
 export const example2 = {
   samples: [
-    new Sample('S001', 'BLOOD', 'URGENT', 45, '09:00', 'P001'), // arrive avant
-    new Sample('S002', 'BLOOD', 'STAT', 30, '09:30', 'P002'), // arrive après mais prioritaire
+    new Sample('S001', 'BLOOD', 'URGENT', 45, '09:00', 'P001'),
+    new Sample('S002', 'BLOOD', 'STAT', 30, '09:30', 'P002'),
   ],
   technicians: [
     new Technician('T001', 'Alice Martin', 'BLOOD', '08:00', '17:00'),
@@ -25,8 +23,7 @@ export const example2 = {
   equipments: [new Equipment('E001', 'Analyseur Sang A', 'BLOOD', true)],
 };
 
-// ─── Exemple 3 : Ressources multiples + parallélisme ────────────────────────
-// Plusieurs types d'échantillons, technicien GENERAL, analyses en parallèle
+// Exemple 3 : Ressources multiples + parallélisme
 export const example3 = {
   samples: [
     new Sample('S001', 'BLOOD', 'URGENT', 60, '09:00', 'P001'),
@@ -43,8 +40,7 @@ export const example3 = {
   ],
 };
 
-// ─── Exemple 4 : Les 3 priorités + conflit de ressources ────────────────────
-// STAT, URGENT et ROUTINE en compétition sur les mêmes ressources
+// Exemple 4 : Les 3 priorités + conflit de ressources
 export const example4 = {
   samples: [
     new Sample('S001', 'BLOOD', 'ROUTINE', 30, '08:00', 'P001'),
@@ -58,8 +54,7 @@ export const example4 = {
   equipments: [new Equipment('E001', 'Analyseur Sang A', 'BLOOD', true)],
 };
 
-// ─── Exemple 5 : Équipement indisponible au départ ──────────────────────────
-// Teste la gestion de available=false
+// Exemple 5 : Équipement indisponible au départ
 export const example5 = {
   samples: [
     new Sample('S001', 'BLOOD', 'STAT', 30, '09:00', 'P001'),
@@ -70,7 +65,15 @@ export const example5 = {
     new Technician('T002', 'Bob Dupont', 'BLOOD', '08:00', '17:00'),
   ],
   equipments: [
-    new Equipment('E001', 'Analyseur Sang A', 'BLOOD', false), // indisponible
+    new Equipment('E001', 'Analyseur Sang A', 'BLOOD', false),
     new Equipment('E002', 'Analyseur Sang B', 'BLOOD', true),
   ],
+};
+
+export const example6 = {
+  samples: [new Sample('S001', 'BLOOD', 'ROUTINE', 30, '12:00', 'P001')],
+  technicians: [
+    new Technician('T001', 'Alice Martin', 'BLOOD', '08:00', '17:00'),
+  ],
+  equipments: [new Equipment('E001', 'Analyseur Sang A', 'BLOOD', true)],
 };
