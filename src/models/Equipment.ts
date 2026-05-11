@@ -1,15 +1,12 @@
-import { toMinutes } from "../../utils/time";
-
-export class Technician {
+export class Equipment {
     private _availableAt: number;
     constructor(
         public readonly id: string,
         public readonly name: string,
-        public readonly speciality: 'BLOOD' | 'URINE' | 'TISSUE' | 'GENERAL',
-        public readonly startTime: string,
-        public readonly endTime: string,
+        public readonly type: 'BLOOD' | 'URINE' | 'TISSUE',
+        public readonly available: boolean
     ){
-        this._availableAt = toMinutes(startTime);
+        this._availableAt = this.available ? 0 : Infinity; // If equipment is available, it can be used immediately, otherwise it's not available at all
     }
 
     public get availableAt(): number {
