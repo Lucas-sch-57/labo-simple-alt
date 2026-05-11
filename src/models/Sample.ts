@@ -5,7 +5,7 @@ export class Sample {
         public readonly type: 'BLOOD' | 'URINE' | 'TISSUE',
         public readonly priority: 'STAT' | 'URGENT' | 'ROUTINE',
         public readonly analysisTime: number,
-        public readonly arrivalTime: Date,
+        public readonly arrivalTime: string,
         public readonly patientId: string
     ) {}
 
