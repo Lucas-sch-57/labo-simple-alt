@@ -52,7 +52,6 @@ export class Scheduler {
     });
 
     const metrics = this.calculateMetrics(schedule, totalAnalysisTime);
-    console.log('Schedule:', [schedule, metrics]);
     return { schedule, metrics };
   }
 
