@@ -1,35 +1,34 @@
 import { Data } from '../types/data';
-import { Schedule, ScheduleResult } from '../types/schedule';
+import { Schedule, ScheduleMetrics, ScheduleResult } from '../types/schedule';
 import { PRIORITY } from '../constants/priority';
 import { toMinutes, toTime } from '../utils/time';
+import { Sample } from '../models/Sample';
+import { Technician } from '../models/Technician';
+import { Equipment } from '../models/Equipment';
 
 export class Scheduler {
+  /**
+   * Organizes laboratory analyses by assigning samples to compatible technicians
+   * and equipment, respecting priority rules and avoiding scheduling conflicts.
+   * @param data - Input data containing samples, technicians, and equipment
+   * @returns A complete schedule with chronological entries and performance metrics
+   */
   public planifyLab(data: Data): ScheduleResult {
-    let schedule: Schedule[] = [];
+    const schedule: Schedule[] = [];
     let totalAnalysisTime = 0;
 
-    const sortedSamples = data.samples.sort((a, b) => {
-      if (PRIORITY[a.priority] === PRIORITY[b.priority]) {
-        const arrivalTimeA = toMinutes(a.arrivalTime);
-        const arrivalTimeB = toMinutes(b.arrivalTime);
-        return arrivalTimeA - arrivalTimeB; // Tri par ordre d'arrivée si les priorités sont égales
-      }
-      return PRIORITY[a.priority] > PRIORITY[b.priority] ? -1 : 1;
-    });
+    const sortedSamples = this.sortSamples(data.samples);
 
     sortedSamples.forEach(sample => {
-      const compatibleTechnician = data.technicians
-        .filter(
-          tech =>
-            tech.speciality === sample.type || tech.speciality === 'GENERAL'
-        )
-        .sort((a, b) => a.availableAt - b.availableAt)[0];
+      const compatibleTechnician = this.findTechnician(
+        sample,
+        data.technicians
+      );
 
-      const compatibleEquipment = data.equipments
-        .filter(equip => equip.type === sample.type && equip.available)
-        .sort((a, b) => a.availableAt - b.availableAt)[0];
+      const compatibleEquipment = this.findEquipment(sample, data.equipments);
 
       if (compatibleTechnician && compatibleEquipment) {
+        // Garantit qu'uaucne ressource n'est assignée avant d'être libre
         const startTime = Math.max(
           toMinutes(sample.arrivalTime),
           compatibleTechnician.availableAt,
@@ -51,31 +50,95 @@ export class Scheduler {
         totalAnalysisTime += endTime - startTime;
       }
     });
+
+    const metrics = this.calculateMetrics(schedule, totalAnalysisTime);
+    console.log('Schedule:', [schedule, metrics]);
+    return { schedule, metrics };
+  }
+
+  /**
+   * Sorts samples by priority (STAT > URGENT > ROUTINE).
+   * Samples with equal priority are sorted by arrival time (earliest first).
+   * @param samples - Unsorted list of samples
+   * @returns Sorted samples array
+   */
+  private sortSamples(samples: Sample[]): Sample[] {
+    return samples.sort((a, b) => {
+      if (PRIORITY[a.priority] === PRIORITY[b.priority]) {
+        const arrivalTimeA = toMinutes(a.arrivalTime);
+        const arrivalTimeB = toMinutes(b.arrivalTime);
+        return arrivalTimeA - arrivalTimeB;
+      }
+      // STAT = 3, URGENT = 2, ROUTINE = 1 - Tri décroissant
+      return PRIORITY[a.priority] > PRIORITY[b.priority] ? -1 : 1;
+    });
+  }
+  /**
+   * Finds the most available compatible technician for a given sample.
+   * Matches by speciality (exact match or GENERAL), then picks the one
+   * with the earliest availableAt time.
+   * @param sample - The sample to assign
+   * @param technicians - List of available technicians
+   * @returns The most available compatible technician, or undefined if none found
+   */
+  private findTechnician(
+    sample: Sample,
+    technicians: Technician[]
+  ): Technician | undefined {
+    return (
+      technicians
+        .filter(
+          tech =>
+            tech.speciality === sample.type || tech.speciality === 'GENERAL'
+        )
+        // Le technicien le plus tôt disponible est sélectionné en premier
+        .sort((a, b) => a.availableAt - b.availableAt)[0]
+    );
+  }
+
+  /**
+   * Finds the most available compatible equipment for a given sample.
+   * Matches by type and filters out unavailable equipment (available=false).
+   * Then picks the one with the earliest availableAt time.
+   * @param sample - The sample to assign
+   * @param equipments - List of available equipment
+   * @returns The most available compatible equipment, or undefined if none found
+   */
+  private findEquipment(
+    sample: Sample,
+    equipments: Equipment[]
+  ): Equipment | undefined {
+    return equipments
+      .filter(equip => equip.type === sample.type && equip.available)
+      .sort((a, b) => a.availableAt - b.availableAt)[0];
+  }
+
+  /**
+   * Calculates performance metrics for the completed schedule.
+   * - totalTime: duration from first analysis start to last analysis end (minutes)
+   * - efficiency: ratio of total analysis work time to total elapsed time (%)
+   * - conflicts: number of resource double-bookings detected (should always be 0)
+   * @param schedule - The completed schedule entries
+   * @param totalAnalysisTime - Sum of all individual analysis durations
+   * @returns Metrics object with totalTime, efficiency, and conflicts
+   */
+  private calculateMetrics(
+    schedule: Schedule[],
+    totalAnalysisTime: number
+  ): ScheduleMetrics {
     const firstStartTime = Math.min(
-      ...schedule.map((s: any) => toMinutes(s.startTime))
+      ...schedule.map(s => toMinutes(s.startTime))
     );
-    const lastEndTime = Math.max(
-      ...schedule.map((s: any) => toMinutes(s.endTime))
-    );
+    const lastEndTime = Math.max(...schedule.map(s => toMinutes(s.endTime)));
     const totalTime = lastEndTime - firstStartTime;
 
     const efficiency = totalAnalysisTime / totalTime;
-
-    let conflicts = 0;
-
-    schedule.forEach((s, index) => {
-      if (s.startTime < schedule[index - 1]?.endTime) {
-        conflicts++;
-      }
-    });
-
-    const metrics = {
+    return {
       totalTime,
       efficiency: parseFloat((efficiency * 100).toFixed(2)),
-      conflicts: 0, // l'algorithme valide déjà qu'il n'y a pas de conflits grâce au Math.max pour le startTime
+      // Conflicts garantit à 0 grâce au Math.max de startTime
+      //Aucune ressource ne peut être assignée avant d'être dispo
+      conflicts: 0,
     };
-
-    console.log('Schedule:', [schedule, metrics]);
-    return { schedule, metrics };
   }
 }

@@ -19,8 +19,4 @@ export class Technician {
   public set availableAt(time: number) {
     this._availableAt = time;
   }
-
-  public isAvailable(time: number): boolean {
-    return time >= this._availableAt;
-  }
 }
