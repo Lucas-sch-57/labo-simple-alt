@@ -17,7 +17,6 @@ export class Scheduler {
    */
   public planifyLab(data: Data): ScheduleResult {
     const schedule: Schedule[] = [];
-    let totalAnalysisTime = 0;
     let averageWaitTimes = {
       STAT: [] as number[],
       URGENT: [] as number[],
@@ -35,44 +34,24 @@ export class Scheduler {
       const compatibleEquipment = this.findEquipment(sample, data.equipments);
 
       if (compatibleTechnician && compatibleEquipment) {
-        // Garantit qu'uaucne ressource n'est assignée avant d'être libre
-        let startTime = Math.max(
-          toMinutes(sample.arrivalTime),
-          compatibleTechnician.availableAt,
-          compatibleEquipment.availableAt
-        );
-        //Lunch break
-        const lunchStart = toMinutes(
-          compatibleTechnician.lunchBreak.split('-')[0]
-        );
-        const lunchEnd = toMinutes(
-          compatibleTechnician.lunchBreak.split('-')[1]
-        );
-
         const realDuration = Math.round(
           sample.analysisTime / compatibleTechnician.efficiency
         );
 
-        if (startTime < lunchEnd && startTime + realDuration > lunchStart) {
-          startTime = lunchEnd;
-        }
-        // Maintenance window
-        const maintenanceStart = toMinutes(
-          compatibleEquipment.maintenanceWindow.split('-')[0]
+        const startTime = this.computeStartTime(
+          sample,
+          compatibleTechnician,
+          compatibleEquipment,
+          realDuration
         );
-        const maintenanceEnd = toMinutes(
-          compatibleEquipment.maintenanceWindow.split('-')[1]
-        );
-
-        if (
-          startTime < maintenanceEnd &&
-          startTime + realDuration > maintenanceStart
-        ) {
-          startTime = maintenanceEnd;
-        }
 
         const endTime = startTime + realDuration;
-        compatibleTechnician.availableAt = endTime;
+
+        this.updateResourceAvailability(
+          compatibleTechnician,
+          compatibleEquipment,
+          endTime
+        );
 
         //Tech occupation
         if (!techOccupation[compatibleTechnician.id]) {
@@ -81,29 +60,23 @@ export class Scheduler {
 
         techOccupation[compatibleTechnician.id] += realDuration;
 
-        compatibleEquipment.availableAt =
-          endTime + compatibleEquipment.cleaningTime;
+        schedule.push(
+          this.createScheduleEntry(
+            sample,
+            compatibleTechnician,
+            compatibleEquipment,
+            startTime,
+            endTime,
+            realDuration
+          )
+        );
 
-        schedule.push({
-          sampleId: sample.id,
-          technicianId: compatibleTechnician.id,
-          equipmentId: compatibleEquipment.id,
-          startTime: toTime(startTime),
-          endTime: toTime(endTime),
-          priority: sample.priority,
-          duration: realDuration,
-          efficiency: compatibleTechnician.efficiency,
-          analysisType: sample.analysisType,
-        });
-
-        totalAnalysisTime += endTime - startTime;
         averageWaitTimes[sample.priority].push(
           startTime - toMinutes(sample.arrivalTime)
         );
       }
     });
-    console.log('totalAnalysisTime:', totalAnalysisTime);
-    console.log('techOccupation:', techOccupation);
+
     const metrics = this.calculateMetrics(
       schedule,
       averageWaitTimes,
@@ -225,5 +198,148 @@ export class Scheduler {
       //Aucune ressource ne peut être assignée avant d'être dispo
       conflicts: 0,
     };
+  }
+  /**
+   * Parses a time window string into numeric minute values.
+   *
+   * Example:
+   * "12:00-13:30" => [720, 810]
+   *
+   * @param window - Time window formatted as "HH:mm-HH:mm"
+   * @returns A tuple containing start and end times in minutes
+   */
+  private parseWindow(window: string): [number, number] {
+    const [start, end] = window.split('-');
+    return [toMinutes(start), toMinutes(end)];
+  }
+  /**
+   * Determines whether two time intervals overlap.
+   *
+   * Intervals are considered overlapping when:
+   * - the start of the first interval is before the end of the second
+   * - and the end of the first interval is after the start of the second
+   *
+   * Example:
+   * [10:00 - 11:00] overlaps [10:30 - 12:00] => true
+   * [10:00 - 11:00] overlaps [11:00 - 12:00] => false
+   *
+   * @param start - Start time of the first interval (minutes)
+   * @param end - End time of the first interval (minutes)
+   * @param windowStart - Start time of the second interval (minutes)
+   * @param windowEnd - End time of the second interval (minutes)
+   * @returns True if the intervals overlap, otherwise false
+   */
+  private overlaps(
+    start: number,
+    end: number,
+    windowStart: number,
+    windowEnd: number
+  ): boolean {
+    return start < windowEnd && end > windowStart;
+  }
+  /**
+   * Computes the earliest valid start time for a sample analysis.
+   *
+   * The analysis can only begin when:
+   * - the sample has arrived,
+   * - the technician is available,
+   * - the equipment is available.
+   *
+   * The method also ensures the analysis does not overlap:
+   * - the technician lunch break,
+   * - the equipment maintenance window.
+   *
+   * If an overlap is detected, the start time is postponed
+   * to the end of the conflicting time window.
+   *
+   * @param sample - Sample to schedule
+   * @param technician - Assigned technician
+   * @param equipment - Assigned equipment
+   * @param duration - Effective analysis duration in minutes
+   * @returns The earliest valid start time in minutes
+   */
+  private computeStartTime(
+    sample: Sample,
+    technician: Technician,
+    equipment: Equipment,
+    duration: number
+  ): number {
+    let startTime = Math.max(
+      toMinutes(sample.arrivalTime),
+      technician.availableAt,
+      equipment.availableAt
+    );
+
+    const [lunchStart, lunchEnd] = this.parseWindow(technician.lunchBreak);
+    if (this.overlaps(startTime, startTime + duration, lunchStart, lunchEnd)) {
+      startTime = lunchEnd;
+    }
+
+    const [maintenanceStart, maintenanceEnd] = this.parseWindow(
+      equipment.maintenanceWindow
+    );
+    if (
+      this.overlaps(
+        startTime,
+        startTime + duration,
+        maintenanceStart,
+        maintenanceEnd
+      )
+    ) {
+      startTime = maintenanceEnd;
+    }
+    return startTime;
+  }
+  /**
+   * Creates a schedule entry representing a planned laboratory analysis.
+   *
+   * Converts internal minute-based timestamps into formatted time strings
+   * and stores all relevant scheduling information.
+   *
+   * @param sample - Scheduled sample
+   * @param technician - Assigned technician
+   * @param equipment - Assigned equipment
+   * @param startTime - Analysis start time in minutes
+   * @param endTime - Analysis end time in minutes
+   * @param duration - Effective analysis duration in minutes
+   * @returns A complete schedule entry
+   */
+  private createScheduleEntry(
+    sample: Sample,
+    technician: Technician,
+    equipment: Equipment,
+    startTime: number,
+    endTime: number,
+    duration: number
+  ): Schedule {
+    return {
+      sampleId: sample.id,
+      technicianId: technician.id,
+      equipmentId: equipment.id,
+      startTime: toTime(startTime),
+      endTime: toTime(endTime),
+      priority: sample.priority,
+      duration,
+      efficiency: technician.efficiency,
+      analysisType: sample.analysisType,
+    };
+  }
+  /**
+   * Updates technician and equipment availability after an analysis.
+   *
+   * - The technician becomes available immediately after the analysis ends.
+   * - The equipment becomes available after its cleaning time has elapsed.
+   *
+   * @param technician - Technician assigned to the analysis
+   * @param equipment - Equipment used for the analysis
+   * @param endTime - Analysis end time in minutes
+   */
+  private updateResourceAvailability(
+    technician: Technician,
+    equipment: Equipment,
+    endTime: number
+  ): void {
+    technician.availableAt = endTime;
+    equipment.availableAt = endTime + equipment.cleaningTime;
   }
 }
