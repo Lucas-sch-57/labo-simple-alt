@@ -1,6 +1,7 @@
 import { samples, technicians, equipments } from './data/samples';
 import { Scheduler } from './services/Scheduler';
 import { Schedule, ScheduleResult } from './types/schedule';
+import * as fs from 'fs';
 
 const scheduler = new Scheduler();
 
@@ -58,3 +59,13 @@ function printResult(label: string, result: ScheduleResult): void {
 
 const result = scheduler.planifyLab({ samples, technicians, equipments });
 printResult('Laboratoire Central — 20 échantillons / 8 techniciens', result);
+
+// Génère le fichier JSON
+
+fs.writeFileSync(
+  'output-example.json',
+  JSON.stringify(result, null, 2),
+  'utf-8'
+);
+
+console.log('output-example.json généré avec succès !');
