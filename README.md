@@ -98,6 +98,7 @@ Avec décalage si chevauchement avec la pause déjeuner du technicien ou la fen�
 ## Contraintes Implémentées
 
 | Contrainte | Description |
+|---|---|
 | Priorité | STAT toujours traité en premier |
 | Spécialisations | Technicien assigné selon `analysisType` |
 | Coefficient d'efficacité | `durée réelle = Math.round(analysisTime / efficiency)` |
@@ -109,6 +110,7 @@ Avec décalage si chevauchement avec la pause déjeuner du technicien ou la fen�
 ## Évolution depuis Version Simple
 
 | Fonctionnalité | Simple | Intermédiaire |
+|---|---|---|
 | Tri par priorité | Oui | Oui |
 | Parallélisme | Oui | Oui |
 | `analysisType` | Non | Oui |
