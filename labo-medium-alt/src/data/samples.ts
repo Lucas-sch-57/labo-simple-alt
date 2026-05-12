@@ -196,7 +196,12 @@ export const equipments: Equipment[] = [
     'EQ001',
     'Analyseur Hématologie XN-3000',
     'BLOOD',
-    ['Hémogramme', 'Numération', 'Coagulation', 'Frottis'],
+    [
+      'Hémogramme standard',
+      'Numération complète',
+      'Coagulation',
+      'Frottis sanguin',
+    ],
     2,
     '06:00-07:00',
     10
@@ -205,7 +210,14 @@ export const equipments: Equipment[] = [
     'EQ002',
     'Automate Biochimie Cobas 8000',
     'CHEMISTRY',
-    ['Bilan hépatique', 'Lipides', 'Électrolytes', 'Troponine', 'HbA1c'],
+    [
+      'Bilan hépatique',
+      'Bilan lipidique',
+      'Électrolytes',
+      'Troponine',
+      'HbA1c',
+      'Vitesse sédimentation',
+    ],
     3,
     '06:30-07:30',
     15
@@ -214,7 +226,7 @@ export const equipments: Equipment[] = [
     'EQ003',
     'Station Microbiologie Vitek MS',
     'MICROBIOLOGY',
-    ['ECBU', 'Hémoculture', 'Parasitologie', 'Prélèvement gorge'],
+    ['ECBU', 'Hémoculture urgente', 'Parasitologie', 'Prélèvement gorge'],
     2,
     '07:00-08:00',
     20
@@ -223,7 +235,12 @@ export const equipments: Equipment[] = [
     'EQ004',
     'Système Immunologie Liaison XL',
     'IMMUNOLOGY',
-    ['Sérologie', 'Allergènes', 'Vaccination', 'Titre anticorps'],
+    [
+      'Sérologie HIV',
+      'Allergènes critiques',
+      'Vaccination contrôle',
+      'Titre anticorps',
+    ],
     2,
     '05:30-06:30',
     12
@@ -232,7 +249,7 @@ export const equipments: Equipment[] = [
     'EQ005',
     'Séquenceur Génétique NextSeq',
     'GENETICS',
-    ['Caryotype', 'Conseil génétique', 'Pharmacogénétique'],
+    ['Caryotype urgent', 'Conseil génétique', 'Pharmacogénétique'],
     1,
     '19:00-20:00',
     30

@@ -5,12 +5,20 @@ export interface Schedule {
   startTime: string;
   endTime: string;
   priority: 'URGENT' | 'STAT' | 'ROUTINE';
+  duration: number;
+  efficiency: number;
+  analysisType: string;
 }
 
 export interface ScheduleMetrics {
   totalTime: number;
   efficiency: number;
   conflicts: number;
+  averageWaitTimePerPriority: {
+    STAT: number;
+    URGENT: number;
+    ROUTINE: number;
+  };
 }
 
 export interface ScheduleResult {

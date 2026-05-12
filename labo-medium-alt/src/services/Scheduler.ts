@@ -5,6 +5,8 @@ import { toMinutes, toTime } from '../utils/time';
 import { Sample } from '../models/Sample';
 import { Technician } from '../models/Technician';
 import { Equipment } from '../models/Equipment';
+import { ANALYSIS_TO_SPECIALTY } from '../constants/analysis-to-specialty';
+import { avg } from '../utils/average';
 
 export class Scheduler {
   /**
@@ -16,6 +18,11 @@ export class Scheduler {
   public planifyLab(data: Data): ScheduleResult {
     const schedule: Schedule[] = [];
     let totalAnalysisTime = 0;
+    let averageWaitTimes = {
+      STAT: [] as number[],
+      URGENT: [] as number[],
+      ROUTINE: [] as number[],
+    };
 
     const sortedSamples = this.sortSamples(data.samples);
 
@@ -29,14 +36,44 @@ export class Scheduler {
 
       if (compatibleTechnician && compatibleEquipment) {
         // Garantit qu'uaucne ressource n'est assignée avant d'être libre
-        const startTime = Math.max(
+        let startTime = Math.max(
           toMinutes(sample.arrivalTime),
           compatibleTechnician.availableAt,
           compatibleEquipment.availableAt
         );
-        const endTime = startTime + sample.analysisTime;
+
+        const lunchStart = toMinutes(
+          compatibleTechnician.lunchBreak.split('-')[0]
+        );
+        const lunchEnd = toMinutes(
+          compatibleTechnician.lunchBreak.split('-')[1]
+        );
+
+        const realDuration = Math.round(
+          sample.analysisTime / compatibleTechnician.efficiency
+        );
+
+        if (startTime < lunchEnd && startTime + realDuration > lunchStart) {
+          startTime = lunchEnd;
+        }
+        const endTime = startTime + realDuration;
         compatibleTechnician.availableAt = endTime;
-        compatibleEquipment.availableAt = endTime;
+        compatibleEquipment.availableAt =
+          endTime + compatibleEquipment.cleaningTime;
+
+        const maintenanceStart = toMinutes(
+          compatibleEquipment.maintenanceWindow.split('-')[0]
+        );
+        const maintenanceEnd = toMinutes(
+          compatibleEquipment.maintenanceWindow.split('-')[1]
+        );
+
+        if (
+          startTime < maintenanceEnd &&
+          startTime + realDuration > maintenanceStart
+        ) {
+          startTime = maintenanceEnd;
+        }
 
         schedule.push({
           sampleId: sample.id,
@@ -45,13 +82,23 @@ export class Scheduler {
           startTime: toTime(startTime),
           endTime: toTime(endTime),
           priority: sample.priority,
+          duration: realDuration,
+          efficiency: compatibleTechnician.efficiency,
+          analysisType: sample.analysisType,
         });
 
         totalAnalysisTime += endTime - startTime;
+        averageWaitTimes[sample.priority].push(
+          startTime - toMinutes(sample.arrivalTime)
+        );
       }
     });
 
-    const metrics = this.calculateMetrics(schedule, totalAnalysisTime);
+    const metrics = this.calculateMetrics(
+      schedule,
+      totalAnalysisTime,
+      averageWaitTimes
+    );
     return { schedule, metrics };
   }
 
@@ -84,12 +131,17 @@ export class Scheduler {
     sample: Sample,
     technicians: Technician[]
   ): Technician | undefined {
+    const requiredSpecialty = ANALYSIS_TO_SPECIALTY[sample.analysisType];
+    console.log(
+      'Recherche technicien pour analyse',
+      sample.analysisType,
+      'requérant spécialité',
+      requiredSpecialty
+    );
+    if (!requiredSpecialty) return undefined;
     return (
       technicians
-        .filter(
-          tech =>
-            tech.speciality === sample.type || tech.speciality === 'GENERAL'
-        )
+        .filter(tech => tech.specialty.includes(requiredSpecialty))
         // Le technicien le plus tôt disponible est sélectionné en premier
         .sort((a, b) => a.availableAt - b.availableAt)[0]
     );
@@ -107,8 +159,10 @@ export class Scheduler {
     sample: Sample,
     equipments: Equipment[]
   ): Equipment | undefined {
+    const requiredEquipmentType = ANALYSIS_TO_SPECIALTY[sample.analysisType];
+    if (!requiredEquipmentType) return undefined;
     return equipments
-      .filter(equip => equip.type === sample.type && equip.available)
+      .filter(equip => equip.type === requiredEquipmentType)
       .sort((a, b) => a.availableAt - b.availableAt)[0];
   }
 
@@ -123,7 +177,8 @@ export class Scheduler {
    */
   private calculateMetrics(
     schedule: Schedule[],
-    totalAnalysisTime: number
+    totalAnalysisTime: number,
+    averageWaitTimes: { [key in 'STAT' | 'URGENT' | 'ROUTINE']: number[] }
   ): ScheduleMetrics {
     const firstStartTime = Math.min(
       ...schedule.map(s => toMinutes(s.startTime))
@@ -132,9 +187,17 @@ export class Scheduler {
     const totalTime = lastEndTime - firstStartTime;
 
     const efficiency = totalAnalysisTime / totalTime;
+
+    const averageWaitTimePerPriority = {
+      STAT: avg(averageWaitTimes.STAT),
+      URGENT: avg(averageWaitTimes.URGENT),
+      ROUTINE: avg(averageWaitTimes.ROUTINE),
+    };
+
     return {
       totalTime,
       efficiency: parseFloat((efficiency * 100).toFixed(2)),
+      averageWaitTimePerPriority,
       // Conflicts garantit à 0 grâce au Math.max de startTime
       //Aucune ressource ne peut être assignée avant d'être dispo
       conflicts: 0,
