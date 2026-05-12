@@ -12,13 +12,14 @@ export interface Schedule {
 
 export interface ScheduleMetrics {
   totalTime: number;
-  efficiency: number;
   conflicts: number;
   averageWaitTimePerPriority: {
     STAT: number;
     URGENT: number;
     ROUTINE: number;
   };
+  technicianUtilization: number;
+  parallelAnalyses: number;
 }
 
 export interface ScheduleResult {

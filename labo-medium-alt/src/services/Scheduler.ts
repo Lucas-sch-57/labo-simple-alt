@@ -23,7 +23,7 @@ export class Scheduler {
       URGENT: [] as number[],
       ROUTINE: [] as number[],
     };
-
+    const techOccupation: Record<string, number> = {};
     const sortedSamples = this.sortSamples(data.samples);
 
     sortedSamples.forEach(sample => {
@@ -41,7 +41,7 @@ export class Scheduler {
           compatibleTechnician.availableAt,
           compatibleEquipment.availableAt
         );
-
+        //Lunch break
         const lunchStart = toMinutes(
           compatibleTechnician.lunchBreak.split('-')[0]
         );
@@ -56,11 +56,7 @@ export class Scheduler {
         if (startTime < lunchEnd && startTime + realDuration > lunchStart) {
           startTime = lunchEnd;
         }
-        const endTime = startTime + realDuration;
-        compatibleTechnician.availableAt = endTime;
-        compatibleEquipment.availableAt =
-          endTime + compatibleEquipment.cleaningTime;
-
+        // Maintenance window
         const maintenanceStart = toMinutes(
           compatibleEquipment.maintenanceWindow.split('-')[0]
         );
@@ -74,6 +70,19 @@ export class Scheduler {
         ) {
           startTime = maintenanceEnd;
         }
+
+        const endTime = startTime + realDuration;
+        compatibleTechnician.availableAt = endTime;
+
+        //Tech occupation
+        if (!techOccupation[compatibleTechnician.id]) {
+          techOccupation[compatibleTechnician.id] = 0;
+        }
+
+        techOccupation[compatibleTechnician.id] += realDuration;
+
+        compatibleEquipment.availableAt =
+          endTime + compatibleEquipment.cleaningTime;
 
         schedule.push({
           sampleId: sample.id,
@@ -93,11 +102,13 @@ export class Scheduler {
         );
       }
     });
-
+    console.log('totalAnalysisTime:', totalAnalysisTime);
+    console.log('techOccupation:', techOccupation);
     const metrics = this.calculateMetrics(
       schedule,
-      totalAnalysisTime,
-      averageWaitTimes
+      averageWaitTimes,
+      techOccupation,
+      Object.keys(techOccupation).length
     );
     return { schedule, metrics };
   }
@@ -132,12 +143,6 @@ export class Scheduler {
     technicians: Technician[]
   ): Technician | undefined {
     const requiredSpecialty = ANALYSIS_TO_SPECIALTY[sample.analysisType];
-    console.log(
-      'Recherche technicien pour analyse',
-      sample.analysisType,
-      'requérant spécialité',
-      requiredSpecialty
-    );
     if (!requiredSpecialty) return undefined;
     return (
       technicians
@@ -177,8 +182,9 @@ export class Scheduler {
    */
   private calculateMetrics(
     schedule: Schedule[],
-    totalAnalysisTime: number,
-    averageWaitTimes: { [key in 'STAT' | 'URGENT' | 'ROUTINE']: number[] }
+    averageWaitTimes: { [key in 'STAT' | 'URGENT' | 'ROUTINE']: number[] },
+    techOccupation: Record<string, number>,
+    nbTechs: number
   ): ScheduleMetrics {
     const firstStartTime = Math.min(
       ...schedule.map(s => toMinutes(s.startTime))
@@ -186,18 +192,35 @@ export class Scheduler {
     const lastEndTime = Math.max(...schedule.map(s => toMinutes(s.endTime)));
     const totalTime = lastEndTime - firstStartTime;
 
-    const efficiency = totalAnalysisTime / totalTime;
-
     const averageWaitTimePerPriority = {
       STAT: avg(averageWaitTimes.STAT),
       URGENT: avg(averageWaitTimes.URGENT),
       ROUTINE: avg(averageWaitTimes.ROUTINE),
     };
 
+    const totalTechOcupation = Object.values(techOccupation).reduce(
+      (sum, val) => sum + val,
+      0
+    );
+    const technicianUtilization =
+      (totalTechOcupation / (totalTime * nbTechs)) * 100;
+
+    const parallelAnalyses = Math.max(
+      ...schedule.map(
+        a =>
+          schedule.filter(
+            b =>
+              toMinutes(b.startTime) < toMinutes(a.endTime) &&
+              toMinutes(b.endTime) > toMinutes(a.startTime)
+          ).length
+      )
+    );
+    //Efficiency = technicianUtilization c'est pourquoi j'ai décidé de ne pas afficher les deux métriques
     return {
       totalTime,
-      efficiency: parseFloat((efficiency * 100).toFixed(2)),
       averageWaitTimePerPriority,
+      technicianUtilization: parseFloat(technicianUtilization.toFixed(2)),
+      parallelAnalyses,
       // Conflicts garantit à 0 grâce au Math.max de startTime
       //Aucune ressource ne peut être assignée avant d'être dispo
       conflicts: 0,

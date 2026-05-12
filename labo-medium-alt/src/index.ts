@@ -40,7 +40,16 @@ function printResult(label: string, result: ScheduleResult): void {
   printSeparator();
   console.log('  Métriques :');
   console.log(`  Temps total  : ${result.metrics.totalTime} min`);
-  console.log(`  Efficacité   : ${result.metrics.efficiency} %`);
+  console.log(`  Utilisation   : ${result.metrics.technicianUtilization} %`);
+  console.log(
+    `  Attente STAT : ${result.metrics.averageWaitTimePerPriority.STAT} min`
+  );
+  console.log(
+    `  Attente URGENT : ${result.metrics.averageWaitTimePerPriority.URGENT} min`
+  );
+  console.log(
+    `  Attente ROUTINE : ${result.metrics.averageWaitTimePerPriority.ROUTINE} min`
+  );
   console.log(
     `  Conflits     : ${result.metrics.conflicts === 0 ? `${GREEN}0 ✓${RESET}` : `${RED}${result.metrics.conflicts} ✗${RESET}`}`
   );
